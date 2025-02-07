@@ -10,7 +10,7 @@ export class ApiHandlerDto {
     @IsNumber()
     @IsNotEmpty()
     @Min(0)
-    id: string;
+    id: number;
 
     @IsString()
     @IsNotEmpty()

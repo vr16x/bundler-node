@@ -1,20 +1,40 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JsonRpcException } from 'src/json-exception-handler.filter';
+import { JsonRpcException } from '@packages/core/common/exception-filters/json-exception-handler.filter';
 import { createWalletClient, Hex, http, publicActions } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
+import { ERROR_CODES } from '../common/error-handler/error-codes';
 
 @Injectable()
 export class Web3ProviderService {
     constructor(private readonly configService: ConfigService) {}
     
+    getChainNameByChainId(chainId: number) {
+        switch(chainId) {
+            case 11155111:
+                return "SEPOLIA";
+            default:
+                throw new JsonRpcException(ERROR_CODES.METHOD_NOT_FOUND, "Unsupported chain");
+        }
+    }
+
+    getChainRpcUrl(chainId: number) {
+        switch (chainId) {
+            case 11155111:
+                return this.configService
+                    .get<string>(`${this.getChainNameByChainId(chainId)}_RPC_URL`);
+            default:
+                throw new JsonRpcException(ERROR_CODES.METHOD_NOT_FOUND, "Unsupported chain");
+        }
+    }
+
     getChain(chainId: number) {
         switch (chainId) {
-            case 1:
+            case 11155111:
                 return sepolia;
             default:
-                throw new JsonRpcException(-32601, "Unsupported chain");
+                throw new JsonRpcException(ERROR_CODES.METHOD_NOT_FOUND, "Unsupported chain");
         }
     }
 
@@ -24,7 +44,7 @@ export class Web3ProviderService {
           const client = createWalletClient({
             account,
             chain: this.getChain(chainId),
-            transport: http()
+            transport: http(this.getChainRpcUrl(chainId))
           }).extend(publicActions);
 
           return client;

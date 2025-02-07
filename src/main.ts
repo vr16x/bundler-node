@@ -1,8 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
-import { JsonRpcExceptionFilter } from './json-exception-handler.filter';
-import { JsonRpcValidationFilter } from './json-rpc-validation.filter';
+import { JsonRpcExceptionFilter } from '@packages/core/common/exception-filters/json-exception-handler.filter';
+import { JsonRpcValidationFilter } from '@packages/core/common/exception-filters/json-rpc-validation.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);

@@ -1,5 +1,6 @@
 import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
 import { Response } from 'express';
+import { ERROR_CODES } from '../error-handler/error-codes';
 
 type ErrorException = { code: number, message: string };
 
@@ -28,7 +29,7 @@ export class JsonRpcExceptionFilter implements ExceptionFilter {
         // @ts-ignore
         const id = request.body?.id ?? null;
 
-        let code = -32603;
+        let code = ERROR_CODES.METHOD_NOT_FOUND;
         let message = 'Internal Server Error';
 
         if (typeof errorResponse === 'object') {

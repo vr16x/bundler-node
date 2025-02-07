@@ -5,6 +5,7 @@ import {
     ExceptionFilter
 } from '@nestjs/common';
 import { Response } from 'express';
+import { ERROR_CODES } from '../error-handler/error-codes';
 
 @Catch(BadRequestException)
 export class JsonRpcValidationFilter implements ExceptionFilter {
@@ -32,7 +33,7 @@ export class JsonRpcValidationFilter implements ExceptionFilter {
         let customError = {
             jsonrpc: "2.1",
             error: {
-                code: -32600,
+                code: ERROR_CODES.INTERNAL_JSON_RPC_ERROR,
                 message,
             },
             id
