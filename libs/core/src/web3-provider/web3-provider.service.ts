@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JsonRpcException } from '@packages/core/common/exception-filters/json-exception-handler.filter';
-import { createWalletClient, Hex, http, publicActions } from 'viem';
+import { createPublicClient, createWalletClient, Hex, http, publicActions } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { ERROR_CODES } from '../common/error-handler/error-codes';
@@ -11,7 +11,7 @@ export class Web3ProviderService {
     constructor(private readonly configService: ConfigService) {}
 
     getChainNameByChainId(chainId: number) {
-        switch(chainId) {
+        switch (chainId) {
             case 11155111:
                 return "SEPOLIA";
             default:
@@ -20,7 +20,7 @@ export class Web3ProviderService {
     }
 
     getExplorerLinkByChainId(chainId: number) {
-        switch(chainId) {
+        switch (chainId) {
             case 11155111:
                 return this.configService.get<string>(`${this.getChainNameByChainId(chainId)}_EXPLORER_URL`);
             default:
@@ -48,15 +48,22 @@ export class Web3ProviderService {
     }
 
     getWalletByPk(privateKey: string, chainId: number) {
-          const account = privateKeyToAccount(privateKey as Hex);
+        const account = privateKeyToAccount(privateKey as Hex);
 
-          const client = createWalletClient({
+        const client = createWalletClient({
             account,
             chain: this.getChain(chainId),
             transport: http(this.getChainRpcUrl(chainId))
-          }).extend(publicActions);
+        }).extend(publicActions);
 
-          return client;
+        return client;
+    }
+
+    getPublicClient(chainId: number) {
+        return createPublicClient({
+            chain: this.getChain(chainId),
+            transport: http(this.getChainRpcUrl(chainId))
+        });
     }
 
     getSupportedChainIds(): number[] {
@@ -67,5 +74,18 @@ export class Web3ProviderService {
     isSupportedChain(chainId: number): boolean {
         const chainIds = this.getSupportedChainIds();
         return chainIds.includes(chainId);
+    }
+
+    async estimateGas(address: `0x${string}`, functionName: string, abi: unknown[], args: unknown[], chainId: number) {
+        return await this.getPublicClient(chainId).estimateContractGas({
+            address,
+            abi,
+            functionName,
+            args: args,
+        });
+    }
+
+    async getGasFees(chainId: number) {
+        return await this.getPublicClient(chainId).getGasPrice();
     }
 }

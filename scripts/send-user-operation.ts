@@ -107,5 +107,6 @@ const sendUserOperation = async (userOperation: UserOperationStruct, userOpHash:
 }
 
 (async () => {
-  nativeTransfer("0x8035F2eCF6D11207aCc97dd292A20D8bc6849876", 0.000001);
+  await nativeTransfer("0x8035F2eCF6D11207aCc97dd292A20D8bc6849876", 0.000001),
+  await nativeTransfer("0x8035F2eCF6D11207aCc97dd292A20D8bc6849876", 0.000002)
 })();

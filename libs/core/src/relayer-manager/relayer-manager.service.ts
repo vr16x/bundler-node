@@ -75,8 +75,6 @@ export class RelayerManagerService implements OnModuleInit {
                 relayerId: relayer.id,
             };
         } else {
-            this.logger.error("No active relayer found");
-
             return {
                 isRelayerAvailable: false,
                 relayerId: -1,

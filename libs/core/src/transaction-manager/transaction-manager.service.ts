@@ -1,11 +1,12 @@
-import { UserOperationStruct } from '@biconomy/account';
+import { DEFAULT_ENTRYPOINT_ADDRESS, UserOperationStruct } from '@biconomy/account';
 import { Injectable, Logger } from '@nestjs/common';
 import { Web3ProviderService } from '../web3-provider/web3-provider.service';
 import { EntryPointContractService } from '../contracts/entry-point-contract/entry-point-contract.service';
 import { RelayerManagerService } from '../relayer-manager/relayer-manager.service';
 import { JsonRpcException } from '../common/exception-filters/json-exception-handler.filter';
 import { ERROR_CODES } from '../common/error-handler/error-codes';
-import { TransactionReceipt } from 'viem';
+import { TransactionReceipt, WriteContractErrorType } from 'viem';
+import { ENTRY_POINT_CONTRACT_ABI } from '../contracts/entry-point-contract/abi/entry-point-contract-abi';
 
 const delay = (delayInms) => {
     return new Promise(resolve => setTimeout(resolve, delayInms));
@@ -13,7 +14,7 @@ const delay = (delayInms) => {
 
 @Injectable()
 export class TransactionManagerService {
-    
+
     private readonly logger = new Logger(TransactionManagerService.name);
 
     constructor(
@@ -37,20 +38,53 @@ export class TransactionManagerService {
                 relayerId = relayerInfo.relayerId
                 break;
             }
-            
-            await delay(1000);
+
+            await delay(1000); // 1 seconds delay
         }
 
         if (relayerId <= 0) {
             throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, "No active relayer found to process your user operation");
         }
 
-        const relayerWallet = await this.relayerManagerService.getRelayerWalletById(relayerId, chainId);
-
         this.relayerManagerService.consumeRelayer(relayerId, userOperation);
 
-        const txHash = await this.entryPointContractService
-            .handleOps(relayerWallet, [userOperation], relayerWallet.account.address);
+        const relayerWallet = await this.relayerManagerService.getRelayerWalletById(relayerId, chainId);
+
+        const gasPrice = await this.web3ProviderService.getGasFees(chainId);
+
+        const gasLimit = await this.web3ProviderService.estimateGas(
+            DEFAULT_ENTRYPOINT_ADDRESS,
+            'handleOps',
+            ENTRY_POINT_CONTRACT_ABI,
+            [[userOperation], relayerWallet.account.address],
+            chainId
+        );
+
+        const nonce = await relayerWallet.getTransactionCount({
+            address: relayerWallet.account.address,
+            blockTag: 'pending',
+        });
+
+        const bumpedGasLimit = gasLimit * BigInt(120) / BigInt(100);
+        const bumpedGasPrice = gasPrice * BigInt(120) / BigInt(100);
+
+        let txHash: `0x${string}` = '0x';
+
+        try {
+            txHash = await this.entryPointContractService.handleOps(
+                relayerWallet,
+                [userOperation],
+                relayerWallet.account.address,
+                {
+                    nonce: nonce,
+                    gas: bumpedGasLimit,
+                    gasPrice: bumpedGasPrice
+                }
+            );
+        } catch (error) {
+            const errorInfo = error as WriteContractErrorType;
+            throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, errorInfo.message);
+        }
 
         let transactionReceipt: TransactionReceipt | null = null;
 
