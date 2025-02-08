@@ -88,4 +88,11 @@ export class Web3ProviderService {
     async getGasFees(chainId: number) {
         return await this.getPublicClient(chainId).getGasPrice();
     }
+
+    async getNonce(walletAddress: `0x${string}`, chainId: number) {
+        return await this.getPublicClient(chainId).getTransactionCount({
+            address: walletAddress,
+            blockTag: 'pending',
+        });
+    }
 }

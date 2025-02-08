@@ -3,12 +3,18 @@ import { RelayerConfigService } from '../config/relayer/relayer-config.service';
 import { Web3ProviderService } from '../web3-provider/web3-provider.service';
 import { UserOperationStruct } from '@biconomy/account';
 
+interface RelayerState {
+    currentNonce: number;
+    usedNonces: number[];
+    pendingTransactionCount: number;
+    executingUserOperations: UserOperationStruct[],
+}
+
 interface RelayerManager {
     id: number;
     name: string;
     privateKey: string;
-    pendingTransactionCount: number;
-    executingUserOperations: UserOperationStruct[],
+    relayerState: Record<number, RelayerState>;
 }
 
 interface GetRelayerWalletResponse {
@@ -50,9 +56,19 @@ export class RelayerManagerService implements OnModuleInit {
                 id: relayer.id,
                 name: relayer.name,
                 privateKey: relayerPrivateKey,
-                pendingTransactionCount: 0,
-                executingUserOperations: []
+                relayerState: {},
             };
+
+            const supportedChainIds = this.web3ProviderService.getSupportedChainIds();
+
+            supportedChainIds.forEach(chainId => {
+                relayerManager.relayerState[chainId] = {
+                    pendingTransactionCount: 0,
+                    executingUserOperations: [],
+                    currentNonce: 0,
+                    usedNonces: [],
+                };
+            });
 
             this.relayers[relayer.id] = relayerManager;
         }
@@ -60,11 +76,11 @@ export class RelayerManagerService implements OnModuleInit {
         this.relayerInitialized = true;
     }
 
-    getActiveRelayer(): GetRelayerWalletResponse {
+    getActiveRelayer(chainId: number): GetRelayerWalletResponse {
         let relayer: RelayerManager | null = null;
 
         for (let relayerInfo of Object.values(this.relayers)) {
-            if (relayerInfo.pendingTransactionCount === 0) {
+            if (relayerInfo.relayerState[chainId].pendingTransactionCount === 0) {
                 relayer = relayerInfo;
             }
         }
@@ -85,34 +101,70 @@ export class RelayerManagerService implements OnModuleInit {
     async getRelayerWalletById(relayerId: number, chainId: number) {
         const relayer: RelayerManager = this.relayers[relayerId];
 
+        if (!relayer) {
+            this.logger.error(`Relayer with ID ${relayerId} not found`);
+        }
+        
         const relayerWallet = this.web3ProviderService.getWalletByPk(relayer.privateKey, chainId);
 
         return relayerWallet;
     }
 
-    consumeRelayer(relayerId: number, userOperation: UserOperationStruct) {
+    consumeRelayer(relayerId: number, userOperation: UserOperationStruct, chainId: number) {
         const relayer: RelayerManager = this.relayers[relayerId];
 
         if (!relayer) {
             this.logger.error(`Relayer with ID ${relayerId} not found`);
         }
 
-        relayer.executingUserOperations.push(userOperation);
-        relayer.pendingTransactionCount += 1;
+        relayer.relayerState[chainId].executingUserOperations.push(userOperation);
+        relayer.relayerState[chainId].pendingTransactionCount += 1;
     }
 
-    relieveRelayer(relayerId: number) {
+    async getRelayerNonce(relayerId: number, chainId: number) {
         const relayer: RelayerManager = this.relayers[relayerId];
 
         if (!relayer) {
             this.logger.error(`Relayer with ID ${relayerId} not found`);
         }
 
-        if (relayer.executingUserOperations.length <= 0 && relayer.pendingTransactionCount === 0) {
+        let nonce = relayer.relayerState[chainId].currentNonce;
+        const usedNonces = relayer.relayerState[chainId].usedNonces;
+
+        if (nonce === 0 || usedNonces.includes(nonce)) {
+            const wallet = await this.getRelayerWalletById(relayerId, chainId);
+            const latestNonce = await this.web3ProviderService.getNonce(wallet.account.address, chainId);
+
+            relayer.relayerState[chainId].currentNonce = latestNonce;
+            nonce = latestNonce;
+        }
+
+        return nonce;
+    }
+
+    async markRelayerNonce(relayerId: number, usedNonce: number, chainId: number) {
+        const relayer: RelayerManager = this.relayers[relayerId];
+
+        if (!relayer) {
+            this.logger.error(`Relayer with ID ${relayerId} not found`);
+        }
+
+        relayer.relayerState[chainId].currentNonce += 1;
+        relayer.relayerState[chainId].usedNonces.push(usedNonce);
+    }
+
+    relieveRelayer(relayerId: number, chainId: number) {
+        const relayer: RelayerManager = this.relayers[relayerId];
+
+        if (!relayer) {
+            this.logger.error(`Relayer with ID ${relayerId} not found`);
+        }
+
+        if (relayer.relayerState[chainId].executingUserOperations.length <= 0 && relayer.relayerState[chainId].pendingTransactionCount === 0) {
             return;
         }
 
-        relayer.executingUserOperations.shift()
-        relayer.pendingTransactionCount -= 1;
+        relayer.relayerState[chainId].executingUserOperations.shift()
+        relayer.relayerState[chainId].pendingTransactionCount -= 1;
     }
 }

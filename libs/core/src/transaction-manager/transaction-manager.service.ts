@@ -32,7 +32,7 @@ export class TransactionManagerService {
         let maxTries = new Array(1.5 * 60).fill(0).map((_, index) => index + 1);
 
         for await (let _tryCount of maxTries) {
-            const relayerInfo = this.relayerManagerService.getActiveRelayer();
+            const relayerInfo = this.relayerManagerService.getActiveRelayer(chainId);
 
             if (relayerInfo.isRelayerAvailable) {
                 relayerId = relayerInfo.relayerId
@@ -46,7 +46,7 @@ export class TransactionManagerService {
             throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, "No active relayer found to process your user operation");
         }
 
-        this.relayerManagerService.consumeRelayer(relayerId, userOperation);
+        this.relayerManagerService.consumeRelayer(relayerId, userOperation, chainId);
 
         const relayerWallet = await this.relayerManagerService.getRelayerWalletById(relayerId, chainId);
 
@@ -60,10 +60,7 @@ export class TransactionManagerService {
             chainId
         );
 
-        const nonce = await relayerWallet.getTransactionCount({
-            address: relayerWallet.account.address,
-            blockTag: 'pending',
-        });
+        const nonce = await this.relayerManagerService.getRelayerNonce(relayerId, chainId);
 
         const bumpedGasLimit = gasLimit * BigInt(120) / BigInt(100);
         const bumpedGasPrice = gasPrice * BigInt(120) / BigInt(100);
@@ -83,7 +80,8 @@ export class TransactionManagerService {
             );
         } catch (error) {
             const errorInfo = error as WriteContractErrorType;
-            throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, errorInfo.message);
+            const errorMessage = errorInfo?.message?.split('\n')?.[0] || errorInfo?.message;
+            throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, errorMessage);
         }
 
         let transactionReceipt: TransactionReceipt | null = null;
@@ -97,7 +95,8 @@ export class TransactionManagerService {
             this.logger.log(`Failed to get transaction receipt for the transaction hash: ${txHash}.`);
         }
 
-        this.relayerManagerService.relieveRelayer(relayerId);
+        this.relayerManagerService.markRelayerNonce(relayerId, nonce, chainId);
+        this.relayerManagerService.relieveRelayer(relayerId, chainId);
 
         return {
             transactionHash: txHash,
