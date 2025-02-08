@@ -40,7 +40,7 @@ export class RelayerManagerService {
     //     }
     // }
 
-    async getRelayerById(id: number, chainId: number) {
+    async getRelayerWalletById(id: number, chainId: number) {
         const relayers = this.relayerConfigService.getRelayers();
 
         const [relayer] = relayers.filter((relayerInfo) => relayerInfo.id === id);

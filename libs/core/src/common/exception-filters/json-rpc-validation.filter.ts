@@ -31,7 +31,7 @@ export class JsonRpcValidationFilter implements ExceptionFilter {
         }
 
         let customError = {
-            jsonrpc: "2.1",
+            jsonrpc: "2.0",
             error: {
                 code: ERROR_CODES.INTERNAL_JSON_RPC_ERROR,
                 message,

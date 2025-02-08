@@ -14,6 +14,10 @@ import {
 } from "@biconomy/account";
 import { sepolia } from "viem/chains";
 
+function getRandomId(min: number, max: number) {
+  return Math.floor(Math.random() * (max - min) + min);
+}
+
 const nativeTransfer = async (to: string, amount: number) => {
   console.log('User operation transaction started');
   const privateKey = `0x${process.env.RELAYER_1_PRIVATE_KEY}`;
@@ -60,7 +64,9 @@ const nativeTransfer = async (to: string, amount: number) => {
 
   partialUserOp.signature = signature;
 
-  sendUserOperation(partialUserOp as UserOperationStruct, userOpHash);
+  const result = await sendUserOperation(partialUserOp as UserOperationStruct, userOpHash);
+
+  console.log(result);
 
   // const { wait, waitForTxHash } = await smartAccount.sendSignedUserOp(partialUserOp as UserOperationStruct)
 
@@ -71,27 +77,33 @@ const nativeTransfer = async (to: string, amount: number) => {
 }
 
 const sendUserOperation = async (userOperation: UserOperationStruct, userOpHash: string) => {
-  const data = JSON.stringify({
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "eth_sendUserOperation",
-    "params": {
-      userOperation: userOperation,
-      userOpHash
-    }
-  });
-  
-  let config = {
-    method: 'post',
-    maxBodyLength: Infinity,
-    url: 'http://localhost:3000/v1/api/11155111',
-    headers: { 
-      'Content-Type': 'application/json'
-    },
-    data : data
-  };
-  
-  await axios.request(config);
+  try {
+    const data = JSON.stringify({
+      "jsonrpc": "2.0",
+      "id": getRandomId(1, 100000),
+      "method": "eth_sendUserOperation",
+      "params": {
+        userOperation: userOperation,
+        userOpHash
+      }
+    });
+    
+    let config = {
+      method: 'post',
+      maxBodyLength: Infinity,
+      url: 'http://localhost:3000/v1/api/11155111',
+      headers: { 
+        'Content-Type': 'application/json'
+      },
+      data : data
+    };
+    
+    const response = await axios.request(config);
+
+    return response.data;
+  } catch (error) {
+    console.log(error.response);
+  }
 }
 
 (async () => {

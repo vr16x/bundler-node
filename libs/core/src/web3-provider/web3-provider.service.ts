@@ -9,11 +9,20 @@ import { ERROR_CODES } from '../common/error-handler/error-codes';
 @Injectable()
 export class Web3ProviderService {
     constructor(private readonly configService: ConfigService) {}
-    
+
     getChainNameByChainId(chainId: number) {
         switch(chainId) {
             case 11155111:
                 return "SEPOLIA";
+            default:
+                throw new JsonRpcException(ERROR_CODES.METHOD_NOT_FOUND, "Unsupported chain");
+        }
+    }
+
+    getExplorerLinkByChainId(chainId: number) {
+        switch(chainId) {
+            case 11155111:
+                return this.configService.get<string>(`${this.getChainNameByChainId(chainId)}_EXPLORER_URL`);
             default:
                 throw new JsonRpcException(ERROR_CODES.METHOD_NOT_FOUND, "Unsupported chain");
         }
