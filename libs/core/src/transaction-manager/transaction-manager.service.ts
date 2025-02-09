@@ -58,15 +58,26 @@ export class TransactionManagerService {
 
         this.logger.log(`Relayer (#${relayerId}) is selected to execute the user operation (${userOpHash}) on the chain ${chainId}`);
 
-        // Transaction execution is carried out here with retry mechanism
-        const result: ExecuteTransactionResponse = await this.executeTransaction(relayerId, userOperation, userOpHash, chainId, 'send');
+        let result: ExecuteTransactionResponse | null = null;
+
+        try {
+            // Transaction execution is carried out here with retry mechanism
+            result = await this.executeTransaction(relayerId, userOperation, userOpHash, chainId, 'send');
+        } catch (error) {
+            // If the transaction execution fails, relieve the relayer for the next user operations
+
+            // This code will deallocate the relayer on the respective chain id
+            this.relayerManagerService.relieveRelayer(relayerId, chainId);
+
+            throw new JsonRpcException(ERROR_CODES.TRANSACTION_REVERTED, error.message);
+        }
 
         // This code will deallocate the relayer on the respective chain id
         this.relayerManagerService.relieveRelayer(relayerId, chainId);
 
         this.logger.log(`Selected relayer (#${relayerId}) executed the user operation (${userOpHash}) on the chain ${chainId}`);
 
-        return result;
+        return result as ExecuteTransactionResponse;
     }
 
     async executeTransaction(
