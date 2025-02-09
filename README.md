@@ -39,6 +39,9 @@ A minimal bundler node built using Nodejs and Typescript capable of executing ER
 ## Project setup:
 
 ```bash
+# Create .env
+$ cp .env-example .env
+# Configure the .env
 $ npm install
 ```
 
