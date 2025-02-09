@@ -45,6 +45,17 @@ $ cp .env-example .env
 $ npm install
 ```
 
+## Project Structure
+The minimal bundler node's codebase follows a **mono repo** style which is very effective for larger projects that require **modularity and composibility**.
+
+1. **libs/core** - Core bundler services are located here
+2. **src/bundler** - The Main JSON RPC APIs are located here
+3. **libs/core/relayer-manager** - A service that manages the N number of relayers coordination and execution of User operations. This handles nonce too.
+4. **libs/core/contracts/entry-point** - A contract service to submit the user operation to entry point contract
+5. **libs/core/transaction-manager** - A service that handles transactions, retries, gas limit, and gas price bumping.
+6. **libs/core/web3-provider** - A service that enables bundler to access the EVM blockchain web API services
+7. **Others** - Error handling, error codes, exception handling, configuration-related services
+
 ## Compile and run the project:
 
 ```bash
