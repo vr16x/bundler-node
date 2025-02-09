@@ -2,6 +2,9 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { RelayerConfigService } from '../config/relayer/relayer-config.service';
 import { Web3ProviderService } from '../web3-provider/web3-provider.service';
 import { UserOperationStruct } from '@biconomy/account';
+import { ConfigService } from '@nestjs/config';
+import { JsonRpcException } from '../common/exception-filters/json-exception-handler.filter';
+import { ERROR_CODES } from '../common/error-handler/error-codes';
 
 interface RelayerState {
     currentNonce: number;
@@ -26,8 +29,9 @@ interface GetRelayerWalletResponse {
 export class RelayerManagerService implements OnModuleInit {
     constructor(
         private readonly relayerConfigService: RelayerConfigService,
-        private readonly web3ProviderService: Web3ProviderService
-    ) {}
+        private readonly web3ProviderService: Web3ProviderService,
+        private readonly configService: ConfigService
+    ) { }
 
     private readonly logger = new Logger(RelayerManagerService.name);
 
@@ -48,44 +52,55 @@ export class RelayerManagerService implements OnModuleInit {
         for await (const relayer of relayers) {
             const relayerPrivateKey = this.relayerConfigService.getRelayerPrivateKey(relayer.id);
 
-            if (!relayerPrivateKey || relayerPrivateKey === '') {
-                this.logger.error(`Relayer ${relayer.name} private key is not configured`);
+            if (relayerPrivateKey) {
+                let relayerManager: RelayerManager = {
+                    id: relayer.id,
+                    name: relayer.name,
+                    privateKey: relayerPrivateKey,
+                    relayerState: {},
+                };
+
+                const supportedChainIds = this.web3ProviderService.getSupportedChainIds();
+
+                supportedChainIds.forEach(chainId => {
+                    relayerManager.relayerState[chainId] = {
+                        pendingTransactionCount: 0,
+                        executingUserOperations: [],
+                        currentNonce: 0,
+                        usedNonces: [],
+                    };
+                });
+
+                this.relayers[relayer.id] = relayerManager;
+
+            } else {
+                this.logger.log(`Relayer (#${relayer.id}) private key is not configured, relayer being skipped.`);
             }
 
-            let relayerManager: RelayerManager = {
-                id: relayer.id,
-                name: relayer.name,
-                privateKey: relayerPrivateKey,
-                relayerState: {},
-            };
-
-            const supportedChainIds = this.web3ProviderService.getSupportedChainIds();
-
-            supportedChainIds.forEach(chainId => {
-                relayerManager.relayerState[chainId] = {
-                    pendingTransactionCount: 0,
-                    executingUserOperations: [],
-                    currentNonce: 0,
-                    usedNonces: [],
-                };
-            });
-
-            this.relayers[relayer.id] = relayerManager;
         }
 
         this.relayerInitialized = true;
     }
 
-    getActiveRelayer(chainId: number): GetRelayerWalletResponse {
+    async getActiveRelayer(chainId: number): Promise<GetRelayerWalletResponse> {
         let relayer: RelayerManager | null = null;
 
-        for (let relayerInfo of Object.values(this.relayers)) {
+        for await (let relayerInfo of Object.values(this.relayers)) {
             if (relayerInfo.relayerState[chainId].pendingTransactionCount === 0) {
-                relayer = relayerInfo;
+                const balance = await this.web3ProviderService.getBalanceByPk(relayerInfo.privateKey, chainId);
+                const minimumRelayerBalance = this.configService.get<string>("MINIMUM_RELAYER_BALANCE");
+
+                if (balance < Number(minimumRelayerBalance)) {
+                    this.logger.log(`Relayer (#${relayerInfo.id}) balance is too low on the chain ${chainId}`);
+                    continue;
+                } else {
+                    relayer = relayerInfo;
+                    break;
+                }
             }
         }
 
-        if (relayer) {    
+        if (relayer) {
             return {
                 isRelayerAvailable: true,
                 relayerId: relayer.id,
@@ -102,9 +117,9 @@ export class RelayerManagerService implements OnModuleInit {
         const relayer: RelayerManager = this.relayers[relayerId];
 
         if (!relayer) {
-            this.logger.error(`Relayer with ID ${relayerId} not found`);
+            throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, `Relayer (#${relayerId}) not found`);
         }
-        
+
         const relayerWallet = this.web3ProviderService.getWalletByPk(relayer.privateKey, chainId);
 
         return relayerWallet;
@@ -114,7 +129,7 @@ export class RelayerManagerService implements OnModuleInit {
         const relayer: RelayerManager = this.relayers[relayerId];
 
         if (!relayer) {
-            this.logger.error(`Relayer with ID ${relayerId} not found`);
+            throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, `Relayer (#${relayerId}) not found`);
         }
 
         relayer.relayerState[chainId].executingUserOperations.push(userOperation);
@@ -125,7 +140,7 @@ export class RelayerManagerService implements OnModuleInit {
         const relayer: RelayerManager = this.relayers[relayerId];
 
         if (!relayer) {
-            this.logger.error(`Relayer with ID ${relayerId} not found`);
+            throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, `Relayer (#${relayerId}) not found`);
         }
 
         let nonce = relayer.relayerState[chainId].currentNonce;
@@ -146,7 +161,7 @@ export class RelayerManagerService implements OnModuleInit {
         const relayer: RelayerManager = this.relayers[relayerId];
 
         if (!relayer) {
-            this.logger.error(`Relayer with ID ${relayerId} not found`);
+            throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, `Relayer (#${relayerId}) not found`);
         }
 
         relayer.relayerState[chainId].currentNonce += 1;
@@ -157,7 +172,7 @@ export class RelayerManagerService implements OnModuleInit {
         const relayer: RelayerManager = this.relayers[relayerId];
 
         if (!relayer) {
-            this.logger.error(`Relayer with ID ${relayerId} not found`);
+            throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, `Relayer (#${relayerId}) not found`);
         }
 
         if (relayer.relayerState[chainId].executingUserOperations.length <= 0 && relayer.relayerState[chainId].pendingTransactionCount === 0) {

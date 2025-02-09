@@ -27,7 +27,7 @@ export class ApiService {
         }  
 
         if (!this.web3ProviderService.isSupportedChain(chainId)) {
-            throw new JsonRpcException(ERROR_CODES.METHOD_NOT_FOUND, "Unsupported chain");
+            throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, "Unsupported chain");
         } 
 
         const requestInfo: RequestInfo = {

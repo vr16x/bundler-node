@@ -1,10 +1,5 @@
-const path = require("path");
-const dotenv = require("dotenv");
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
-
 import { http, type Hex, createWalletClient, parseEther, toBytes } from "viem";
-import axios  from "axios";
-import { privateKeyToAccount } from "viem/accounts";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import {
   DEFAULT_ENTRYPOINT_ADDRESS,
   type SupportedSigner,
@@ -13,102 +8,93 @@ import {
   getUserOpHash
 } from "@biconomy/account";
 import { sepolia } from "viem/chains";
-
-function getRandomId(min: number, max: number) {
-  return Math.floor(Math.random() * (max - min) + min);
-}
+import { getRandomId, sendUserOperation, UserOperationRequestData } from "./send-user-op-utils";
+const path = require("path");
+const dotenv = require("dotenv");
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const nativeTransfer = async (to: string, amount: number) => {
-  console.log('User operation transaction started');
-  const privateKey = `0x${process.env.RELAYER_1_PRIVATE_KEY}`;
+  // User's credentials
+  const privateKey: `0x${string}` = `0x${process.env.USER_PRIVATE_KEY}`;
+
+  // Chain Configuration
   const rpcUrl = process.env.SEPOLIA_RPC_URL;
   const bundlerUrl = process.env.SEPOLIA_BUNDLER_URL;
   const chain = sepolia;
 
-  // ----- 1. Generate EOA from private key
+  // User's EOA wallet configurations
   const account = privateKeyToAccount(privateKey as Hex);
+  console.log("EOA address: ", account.address);
 
+  // User's EOA wallet client configurations
   const client = createWalletClient({
     account,
     chain,
     transport: http(rpcUrl)
-  })
+  });
 
-  const eoa = client.account.address;
-
-  console.log(`EOA address: ${eoa}`);
-
-  // ------ 2. Create biconomy smart account instance
+  // User's Smart Wallet configurations
   const smartAccount = await createSmartAccountClient({
     signer: client as SupportedSigner,
     bundlerUrl: bundlerUrl as string,
     biconomyPaymasterApiKey: process.env.SEPOLIA_PAYMASTER_API_KEY as string
-  })
+  });
 
-  const scwAddress = await smartAccount.getAccountAddress()
-  
-  console.log("SCW Address", scwAddress)
+  console.log("Smart account address: ", await smartAccount.getAccountAddress());
 
-  // ------ 3. Generate transaction data
+  // Transaction call data
   const transaction = {
     to,
     value: parseEther(amount.toString())
   }
 
   let partialUserOp = await smartAccount.buildUserOp([transaction]);
+
+  // Esitmating gas with existing Biconomy bundler RPC
   partialUserOp = await smartAccount.estimateUserOpGas(partialUserOp);
 
-  const userOpHash = getUserOpHash(partialUserOp, DEFAULT_ENTRYPOINT_ADDRESS, 11155111);
+  const userOpHash = getUserOpHash(partialUserOp, DEFAULT_ENTRYPOINT_ADDRESS, chain.id);
 
   const signature = await smartAccount.signMessage(toBytes(userOpHash));
 
   partialUserOp.signature = signature;
 
-  const result = await sendUserOperation(partialUserOp as UserOperationStruct, userOpHash);
+  const randomId = getRandomId(1, 100000);
 
-  console.log(result);
-
-  // const { wait, waitForTxHash } = await smartAccount.sendSignedUserOp(partialUserOp as UserOperationStruct)
-
-  // const receipt = await wait();
-  // const status = await waitForTxHash();
-
-  // console.log(receipt, status);
-}
-
-const sendUserOperation = async (userOperation: UserOperationStruct, userOpHash: string) => {
-  try {
-    const data = JSON.stringify({
-      "jsonrpc": "2.0",
-      "id": getRandomId(1, 100000),
-      "method": "eth_sendUserOperation",
-      "params": {
-        userOperation: userOperation,
-        userOpHash
-      }
-    });
-    
-    let config = {
-      method: 'post',
-      maxBodyLength: Infinity,
-      url: 'http://localhost:3000/v1/api/11155111',
-      headers: { 
-        'Content-Type': 'application/json'
-      },
-      data : data
-    };
-    
-    const response = await axios.request(config);
-
-    return response.data;
-  } catch (error) {
-    console.log("ERROR: ");
-    console.log(error?.message);
-    console.log(error?.response?.data);
+  // User operation RPC request object
+  const userOperationRequestData: UserOperationRequestData = {
+    jsonrpc: "2.0",
+    id: randomId,
+    method: "eth_sendUserOperation",
+    params: {
+      userOperation: partialUserOp as UserOperationStruct,
+      userOpHash
+    }
   }
+
+  const response = await sendUserOperation(userOperationRequestData, chain.id);
+
+  if (response.isSuccess) {
+    console.log('\n\n============================================================\n\n');
+    console.log("Transaction hash: ", response.result.transactionHash);
+    console.log('\n\n============================================================\n\n');
+    // Sometimes the bundler failed to get the transaction receipt within the given time. In this case,
+    // the client can fetch the transaction receipt with the help of transaction hash
+    console.log("Transaction receipt: ", response?.result?.transactionReceipt
+      ? JSON.parse(response.result.transactionReceipt) : response.result.transactionReceipt);
+    console.log('\n\n============================================================\n\n');
+  } else {
+    console.log('\n\n============================================================\n\n');
+    console.log("Error: ", response.error.message);
+    console.log('\n\n============================================================\n\n');
+  }
+
 }
 
 (async () => {
-  await nativeTransfer("0x8035F2eCF6D11207aCc97dd292A20D8bc6849876", 0.000001);
-  // await nativeTransfer("0x8035F2eCF6D11207aCc97dd292A20D8bc6849876", 0.000002);
+  // Random User's EOA wallet configurations
+  const randomUser = privateKeyToAccount(generatePrivateKey());
+  console.log("Random User EOA address: ", randomUser.address);
+
+  await nativeTransfer(randomUser.address, 0.000001);
 })();

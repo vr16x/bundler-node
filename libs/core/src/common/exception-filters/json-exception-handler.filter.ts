@@ -29,7 +29,7 @@ export class JsonRpcExceptionFilter implements ExceptionFilter {
         // @ts-ignore
         const id = request.body?.id ?? null;
 
-        let code = ERROR_CODES.METHOD_NOT_FOUND;
+        let code = ERROR_CODES.INTERNAL_JSON_RPC_ERROR;
         let message = 'Internal Server Error';
 
         if (typeof errorResponse === 'object') {

@@ -16,12 +16,26 @@ export class RelayerConfigService {
                 id: 1,
                 name: 'Relayer One'
             },
+            {
+                id: 2,
+                name: 'Relayer Two'
+            },
+            {
+                id: 3,
+                name: 'Relayer Three'
+            },
+            {
+                id: 4,
+                name: 'Relayer Four'
+            },
         ];
 
         return relayers;
     }
 
     getRelayerPrivateKey(id: number) {
-        return `0x${this.configService.get<string>(`RELAYER_${id}_PRIVATE_KEY`)}`;
+        const privateKey = this.configService.get<string>(`RELAYER_${id}_PRIVATE_KEY`);
+
+        return privateKey ? `0x${privateKey}` : null;
     }
 }

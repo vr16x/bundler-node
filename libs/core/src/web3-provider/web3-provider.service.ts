@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JsonRpcException } from '@packages/core/common/exception-filters/json-exception-handler.filter';
-import { createPublicClient, createWalletClient, Hex, http, publicActions } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { createPublicClient, createWalletClient, formatEther, Hex, http, publicActions } from 'viem';
+import { privateKeyToAccount, privateKeyToAddress } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { ERROR_CODES } from '../common/error-handler/error-codes';
 
@@ -15,7 +15,7 @@ export class Web3ProviderService {
             case 11155111:
                 return "SEPOLIA";
             default:
-                throw new JsonRpcException(ERROR_CODES.METHOD_NOT_FOUND, "Unsupported chain");
+                throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, "Unsupported chain");
         }
     }
 
@@ -24,7 +24,7 @@ export class Web3ProviderService {
             case 11155111:
                 return this.configService.get<string>(`${this.getChainNameByChainId(chainId)}_EXPLORER_URL`);
             default:
-                throw new JsonRpcException(ERROR_CODES.METHOD_NOT_FOUND, "Unsupported chain");
+                throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, "Unsupported chain");
         }
     }
 
@@ -34,7 +34,7 @@ export class Web3ProviderService {
                 return this.configService
                     .get<string>(`${this.getChainNameByChainId(chainId)}_RPC_URL`);
             default:
-                throw new JsonRpcException(ERROR_CODES.METHOD_NOT_FOUND, "Unsupported chain");
+                throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, "Unsupported chain");
         }
     }
 
@@ -43,7 +43,7 @@ export class Web3ProviderService {
             case 11155111:
                 return sepolia;
             default:
-                throw new JsonRpcException(ERROR_CODES.METHOD_NOT_FOUND, "Unsupported chain");
+                throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, "Unsupported chain");
         }
     }
 
@@ -74,6 +74,12 @@ export class Web3ProviderService {
     isSupportedChain(chainId: number): boolean {
         const chainIds = this.getSupportedChainIds();
         return chainIds.includes(chainId);
+    }
+
+    async getBalanceByPk(privateKey: string, chainId: number){
+        const balanceInWei =  await this.getPublicClient(chainId)
+            .getBalance({ address: privateKeyToAddress(privateKey as Hex) });
+        return Number(formatEther(balanceInWei));
     }
 
     async estimateGas(address: `0x${string}`, functionName: string, abi: unknown[], args: unknown[], chainId: number) {
