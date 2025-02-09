@@ -4,9 +4,13 @@ import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { JsonRpcExceptionFilter } from '@packages/core/common/exception-filters/json-exception-handler.filter';
 import { JsonRpcValidationFilter } from '@packages/core/common/exception-filters/json-rpc-validation.filter';
 import { CustomGlobalExceptionFilter } from '@packages/core/common/exception-filters/custom-global-exception-filter';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.enableCors();
+  app.use(helmet());
 
   app.enableVersioning({
     type: VersioningType.URI,
