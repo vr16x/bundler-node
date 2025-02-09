@@ -1,4 +1,4 @@
-import { Body, Controller, Param, ParseIntPipe, Post, UseFilters } from '@nestjs/common';
+import { Body, Controller, Param, ParseIntPipe, Post } from '@nestjs/common';
 import { ApiHandlerDto } from './dto/api-handler.dto';
 import { ApiService } from './api.service';
 
