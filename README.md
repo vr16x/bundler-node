@@ -24,75 +24,72 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+A minimal bundler node built using Nodejs and Typescript capable of executing ERC-4337 User Operations with Smart Wallets.
 
-## Project setup
+## Tech Stack Used:
+1. **NestJs** - Nodejs backend framework
+2. **Viem** - A lightweight library to interact with the EVM blockchain
+3. **Jest** - A testing framework used for the end-to-end testing
+4. **JSON RPC 2.0** - JSON RPC 2.0 standard API for interacting with EVM nodes and services
+
+## Blockchain Used:
+
+**Sepolia Testnet** is used for the minimal bundler node. However, the code can support multiple chains with ease just by configuring the other chains through ENV and fund respective wallets. 
+
+## Project setup:
 
 ```bash
 $ npm install
 ```
 
-## Compile and run the project
+## Compile and run the project:
 
 ```bash
-# development
-$ npm run start
-
 # watch mode
 $ npm run start:dev
-
-# production mode
-$ npm run start:prod
 ```
 
-## Run tests
+## Run tests:
 
 ```bash
-# unit tests
-$ npm run test
-
 # e2e tests
 $ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Run scripts:
 
 ```bash
-$ npm install -g mau
-$ mau deploy
+# send user operation
+$ npm run script:send-user-operation
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Constraints as per the notion page
+1. JSON RPC 2.0 compatible API to execute UserOperations and Returns transaction hash and receipt - ✅
+2. No stateful or persistent storage is required for simplicity - ✅
+3. More than one EOA wallet should be used to execute the User Operations - ✅
+4. Sepolia chain should be supported - ✅
+5. Basic test cases should be added - ✅
+6. The Bundler node should effectively handle User Operation without stuck or pending transactions - ✅
+7. No paymaster usage is required - ✅
+8. Proper error handling should be implemented - ✅
+9. No User Operation simulation is required - ✅
 
-## Resources
+## Implementation Explanation:
+1. the **relayer manager** is implemented to manage **N number of relayers** to coordinate the User Operation transactions. Many Relayer managers can be added to this bundler node with ease. The greater the relayers, the greater the number of User Operation processing
+2. The **relayer manager manages the nonce** to overcome the nonce-related issues in transaction execution
+3. The **transaction manager** is implemented to execute and **retry transactions** with bumped gas limit and gas price.
+4. The API is fully compatible with **JSON RPC 2.0**
+5. **Modular services** are added to increase the code quality and reusability throughout the codebase.
 
-Check out a few resources that may come in handy when working with NestJS:
+## Implementation Limitations based on constraints:
+As per the constraints or requirements, there is no User Operation mempool is implemented. This results in some performance and other limitations which can be enhanced by adding mempool and queue-based operations to execute the user ops in a background worker.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+1. Getting both transaction hash and transaction receipt can take several more seconds. These things can be moved to the client where the client can get the transaction receipt with userOpHash
+2. As there is no state, only one transaction retry mechanism is added. This can be improved by adding a queue where N number of retries can be performed.
+3. As the user operation needs to be executed instantly, the availability of relayers might be low if there are more concurrent executions which will result in waiting for the relayers to get allocated for us. This can be improved by executing the User Ops in the background worker with Queue.
+4. Currently I am using the slightly bumped gas price to increase the transaction success rate. But In real-time, the transaction may get stuck if the bumped gas price is also not enough (Mostly not frequent). This may result in a stuck transaction which needs to be cleared by replacing the nonce. To implemented this, we need stateful app and some automation to detect and cancel transactions which is not fully implemented
 
-## Support
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
 
 ## License
 
