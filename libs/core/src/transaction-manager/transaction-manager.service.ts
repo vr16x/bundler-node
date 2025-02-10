@@ -7,6 +7,9 @@ import { JsonRpcException } from '../common/exception-filters/json-exception-han
 import { ERROR_CODES } from '../common/error-handler/error-codes';
 import { EstimateContractGasErrorType, TransactionReceipt, WriteContractErrorType } from 'viem';
 import { ENTRY_POINT_CONTRACT_ABI } from '../contracts/entry-point-contract/abi/entry-point-contract-abi';
+import { Mutex } from 'async-mutex';
+
+const mutex = new Mutex();
 
 export type TransactionExecutionType = 'send' | 'resend';
 
@@ -37,24 +40,32 @@ export class TransactionManagerService {
         // enforced like this
         let maxTries = new Array(60).fill(0);
 
-        for await (let _ of maxTries) {
-            // Get the relayer wallet which is free for executing the user operation for the respective chainId
-            const relayerInfo = await this.relayerManagerService.getActiveRelayer(chainId);
+        // This will mutually lock the function execution so that the concurrent access to the relayer selection will be
+        // sequential throughtout the network. This prevent multiple concurrent access to a relayer
+        relayerId = await mutex.runExclusive(async () => {
+            let selectedRelayerId: number = -1;
 
-            if (relayerInfo.isRelayerAvailable) {
-                relayerId = relayerInfo.relayerId
-                break;
+            for await (let _ of maxTries) {
+                // Get the relayer wallet which is free for executing the user operation for the respective chainId
+                const relayerInfo = await this.relayerManagerService.getActiveRelayer(chainId);
+    
+                if (relayerInfo.isRelayerAvailable) {
+                    selectedRelayerId = relayerInfo.relayerId
+                    break;
+                }
+    
+                await delay(1500); // 1.5 seconds delay
             }
 
-            await delay(1500); // 1.5 seconds delay
-        }
+            if (selectedRelayerId <= 0) {
+                throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, "No active relayer found to process your user operation");
+            }
 
-        if (relayerId <= 0) {
-            throw new JsonRpcException(ERROR_CODES.INTERNAL_JSON_RPC_ERROR, "No active relayer found to process your user operation");
-        }
+            // This code will allocate the relayer for this user operation execution based on chain id
+            this.relayerManagerService.consumeRelayer(selectedRelayerId, userOperation, chainId);
 
-        // This code will allocate the relayer for this user operation execution based on chain id
-        this.relayerManagerService.consumeRelayer(relayerId, userOperation, chainId);
+            return selectedRelayerId;
+        });
 
         this.logger.log(`Relayer (#${relayerId}) is selected to execute the user operation (${userOpHash}) on the chain ${chainId}`);
 

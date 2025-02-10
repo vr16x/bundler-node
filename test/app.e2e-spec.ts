@@ -11,7 +11,7 @@ jest.setTimeout(300000); // 5 minutes timeout
 
 describe('Bundler Node E2E Testing: ', () => {
   // User's credentials
-  const privateKey: `0x${string}` = `0x${process.env.USER_PRIVATE_KEY}`;
+  const privateKey: `0x${string}` = `0x${process.env.USER_1_PRIVATE_KEY}`;
 
   // Chain Configuration
   const rpcUrl = process.env.SEPOLIA_RPC_URL;
@@ -47,8 +47,7 @@ describe('Bundler Node E2E Testing: ', () => {
     // User's Smart Wallet configurations
     smartAccount = await createSmartAccountClient({
       signer: client as SupportedSigner,
-      bundlerUrl: bundlerUrl as string,
-      biconomyPaymasterApiKey: process.env.SEPOLIA_PAYMASTER_API_KEY as string
+      bundlerUrl: bundlerUrl as string
     });
 
     console.log("Smart account address: ", await smartAccount.getAccountAddress());
@@ -90,12 +89,8 @@ describe('Bundler Node E2E Testing: ', () => {
       value: parseEther(amountToBeTransferred.toString())
     }
 
-    let partialUserOp = await (smartAccount as BiconomySmartAccountV2).buildUserOp([transaction]);
-    partialUserOp = await (smartAccount as BiconomySmartAccountV2).estimateUserOpGas(partialUserOp);
-
-    const userOpHash = getUserOpHash(partialUserOp, DEFAULT_ENTRYPOINT_ADDRESS, chain.id);
-
-    partialUserOp.signature = undefined;
+    const partialUserOp = await (smartAccount as BiconomySmartAccountV2).buildUserOp([transaction]);
+    const userOpHash = await (smartAccount as BiconomySmartAccountV2).getUserOpHash(partialUserOp);
 
     const randomId = getRandomId(1, 100000);
 
@@ -114,20 +109,14 @@ describe('Bundler Node E2E Testing: ', () => {
     expect(response.isSuccess).toEqual(false);
   });
 
-  test('Sending a valid UserOperation should pass', async () => {
+  test("Sending an UserOp with invalid userOpHash should fail", async () => {
     const transaction = {
       to: randomUser.address,
       value: parseEther(amountToBeTransferred.toString())
     }
 
-    let partialUserOp = await (smartAccount as BiconomySmartAccountV2).buildUserOp([transaction]);
-    partialUserOp = await (smartAccount as BiconomySmartAccountV2).estimateUserOpGas(partialUserOp);
-
-    const userOpHash = getUserOpHash(partialUserOp, DEFAULT_ENTRYPOINT_ADDRESS, chain.id);
-
-    const signature = await (smartAccount as BiconomySmartAccountV2).signMessage(toBytes(userOpHash));
-
-    partialUserOp.signature = signature;
+    const partialUserOp = await (smartAccount as BiconomySmartAccountV2).buildUserOp([transaction]);
+    const signedUserOp = await (smartAccount as BiconomySmartAccountV2).signUserOp(partialUserOp);
 
     const randomId = getRandomId(1, 100000);
 
@@ -136,7 +125,34 @@ describe('Bundler Node E2E Testing: ', () => {
       id: randomId,
       method: "eth_sendUserOperation",
       params: {
-        userOperation: partialUserOp as UserOperationStruct,
+        userOperation: signedUserOp as UserOperationStruct,
+        userOpHash: ''
+      }
+    }
+
+    const response = await sendUserOperation(userOperationRequestData, chain.id);
+    
+    expect(response.isSuccess).toEqual(false);
+  });
+
+  test('Sending a valid UserOperation should pass', async () => {
+    const transaction = {
+      to: randomUser.address,
+      value: parseEther(amountToBeTransferred.toString())
+    }
+
+    const partialUserOp = await (smartAccount as BiconomySmartAccountV2).buildUserOp([transaction]);
+    const userOpHash = await (smartAccount as BiconomySmartAccountV2).getUserOpHash(partialUserOp);
+    const signedUserOp = await (smartAccount as BiconomySmartAccountV2).signUserOp(partialUserOp);
+  
+    const randomId = getRandomId(1, 100000);
+
+    const userOperationRequestData: UserOperationRequestData = {
+      jsonrpc: "2.0",
+      id: randomId,
+      method: "eth_sendUserOperation",
+      params: {
+        userOperation: signedUserOp as UserOperationStruct,
         userOpHash
       }
     }

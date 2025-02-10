@@ -1,11 +1,8 @@
-import { http, type Hex, createWalletClient, parseEther, toBytes } from "viem";
+import { http, type Hex, createWalletClient, parseEther } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import {
-  DEFAULT_ENTRYPOINT_ADDRESS,
-  type SupportedSigner,
   UserOperationStruct,
   createSmartAccountClient,
-  getUserOpHash
 } from "@biconomy/account";
 import { sepolia } from "viem/chains";
 import { getRandomId, sendUserOperation, UserOperationRequestData } from "./send-user-op-utils";
@@ -13,17 +10,14 @@ const path = require("path");
 const dotenv = require("dotenv");
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-const nativeTransfer = async (to: string, amount: number) => {
-  // User's credentials
-  const privateKey: `0x${string}` = `0x${process.env.USER_PRIVATE_KEY}`;
-
+const nativeTransfer = async (userPrivateKey: string, to: string, amount: number) => {
   // Chain Configuration
   const rpcUrl = process.env.SEPOLIA_RPC_URL;
   const bundlerUrl = process.env.SEPOLIA_BUNDLER_URL;
   const chain = sepolia;
 
   // User's EOA wallet configurations
-  const account = privateKeyToAccount(privateKey as Hex);
+  const account = privateKeyToAccount(userPrivateKey as Hex);
   console.log("EOA address: ", account.address);
 
   // User's EOA wallet client configurations
@@ -35,9 +29,8 @@ const nativeTransfer = async (to: string, amount: number) => {
 
   // User's Smart Wallet configurations
   const smartAccount = await createSmartAccountClient({
-    signer: client as SupportedSigner,
-    bundlerUrl: bundlerUrl as string,
-    biconomyPaymasterApiKey: process.env.SEPOLIA_PAYMASTER_API_KEY as string
+    signer: client,
+    bundlerUrl: bundlerUrl as string
   });
 
   console.log("Smart account address: ", await smartAccount.getAccountAddress());
@@ -48,16 +41,9 @@ const nativeTransfer = async (to: string, amount: number) => {
     value: parseEther(amount.toString())
   }
 
-  let partialUserOp = await smartAccount.buildUserOp([transaction]);
-
-  // Esitmating gas with existing Biconomy bundler RPC
-  partialUserOp = await smartAccount.estimateUserOpGas(partialUserOp);
-
-  const userOpHash = getUserOpHash(partialUserOp, DEFAULT_ENTRYPOINT_ADDRESS, chain.id);
-
-  const signature = await smartAccount.signMessage(toBytes(userOpHash));
-
-  partialUserOp.signature = signature;
+  const partialUserOp = await smartAccount.buildUserOp([transaction]);
+  const userOpHash = await smartAccount.getUserOpHash(partialUserOp);
+  const signedUserOp = await smartAccount.signUserOp(partialUserOp);
 
   const randomId = getRandomId(1, 100000);
 
@@ -67,7 +53,7 @@ const nativeTransfer = async (to: string, amount: number) => {
     id: randomId,
     method: "eth_sendUserOperation",
     params: {
-      userOperation: partialUserOp as UserOperationStruct,
+      userOperation: signedUserOp as UserOperationStruct,
       userOpHash
     }
   }
@@ -75,6 +61,8 @@ const nativeTransfer = async (to: string, amount: number) => {
   const response = await sendUserOperation(userOperationRequestData, chain.id);
 
   if (response.isSuccess) {
+    console.log('\n\n============================================================\n\n');
+    console.log("Transaction link: ", response.result.explorerLink);
     console.log('\n\n============================================================\n\n');
     console.log("Transaction hash: ", response.result.transactionHash);
     console.log('\n\n============================================================\n\n');
@@ -96,5 +84,18 @@ const nativeTransfer = async (to: string, amount: number) => {
   const randomUser = privateKeyToAccount(generatePrivateKey());
   console.log("Random User EOA address: ", randomUser.address);
 
-  await nativeTransfer(randomUser.address, 0.000001);
+  // User's 1 credentials
+  const privateKeyUserOne: `0x${string}` = `0x${process.env.USER_1_PRIVATE_KEY}`;
+
+  // User's 2 credentials
+  const privateKeyUserTwo: `0x${string}` = `0x${process.env.USER_2_PRIVATE_KEY}`;
+
+  // User's 3 credentials
+  const privateKeyUserThree: `0x${string}` = `0x${process.env.USER_3_PRIVATE_KEY}`;
+
+  await Promise.all([
+    nativeTransfer(privateKeyUserOne, randomUser.address, 0.000001),
+    nativeTransfer(privateKeyUserTwo, randomUser.address, 0.000001),
+    nativeTransfer(privateKeyUserThree, randomUser.address, 0.000001)
+  ]);
 })();
