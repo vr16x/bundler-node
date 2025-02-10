@@ -64,6 +64,7 @@ $ npm run start:dev
 ```
 
 ## Run tests:
+#### Note: This executes from validations to one single full user-operation transaction
 
 ```bash
 # e2e tests
@@ -71,6 +72,7 @@ $ npm run test:e2e
 ```
 
 ## Run scripts:
+#### Note: This executes three concurrent user operation transactions showing how the bundler can be accessed concurrently.
 
 ```bash
 # send user operation
